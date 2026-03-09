@@ -51,3 +51,27 @@ codex-upstream         # explicit upstream
 - `REAL_CODEX_BIN`: explicit Codex binary path
 - `OLLAMA_BIN`: explicit Ollama binary path
 - `TARGET_BIN_DIR`: custom install destination for wrappers
+
+## Aider + Ollama helper
+
+- `aliases/aider-local`: launches aider against local Ollama with sane defaults.
+
+Behavior:
+- Auto-starts Ollama daemon if not running.
+- Sets `OLLAMA_API_BASE` automatically (`http://127.0.0.1:11434` by default).
+- Sets `AIDER_OPENAI_API_BASE` to `${OLLAMA_API_BASE}/v1`.
+- Uses `ollama/qwen2.5-coder:14b` by default.
+- Suppresses non-critical model metadata warnings (`--no-show-model-warnings`).
+
+Usage:
+
+```bash
+aider-local
+# or
+aider-local --model ollama/qwen3-coder:30b
+```
+
+Optional overrides:
+- `AIDER_OLLAMA_MODEL`: default model for aider-local
+- `OLLAMA_BIN`: explicit ollama binary path
+- `AIDER_BIN`: explicit aider binary path

@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AIDER_BIN="${AIDER_BIN:-$(command -v aider || true)}"
+if [[ -z "$AIDER_BIN" ]]; then
+  echo "aider not found in PATH. Install it first." >&2
+  exit 1
+fi
+
+OLLAMA_BIN="${OLLAMA_BIN:-$HOME/.local/bin/ollama}"
+if ! command -v "$OLLAMA_BIN" >/dev/null 2>&1; then
+  OLLAMA_BIN="ollama"
+fi
+
+DEFAULT_MODEL="${AIDER_OLLAMA_MODEL:-qwen2.5-coder:14b}"
+MODEL="$DEFAULT_MODEL"
+HAS_MODEL_FLAG=0
+
+# Respect explicit --model/-m if the user passes one.
+for ((i=1; i<=$#; i++)); do
+  arg="${!i}"
+  if [[ "$arg" == "--model" || "$arg" == "-m" ]]; then
+    HAS_MODEL_FLAG=1
+    j=$((i+1))
+    if (( j <= $# )); then
+      raw_model="${!j}"
+      if [[ "$raw_model" == ollama/* ]]; then
+        MODEL="${raw_model#ollama/}"
+      else
+        MODEL="$raw_model"
+      fi
+    fi
+    break
+  elif [[ "$arg" == --model=* ]]; then
+    HAS_MODEL_FLAG=1
+    raw_model="${arg#--model=}"
+    if [[ "$raw_model" == ollama/* ]]; then
+      MODEL="${raw_model#ollama/}"
+    else
+      MODEL="$raw_model"
+    fi
+    break
+  fi
+done
+
+ensure_ollama() {
+  if "$OLLAMA_BIN" list >/dev/null 2>&1; then
+    return 0
+  fi
+
+  mkdir -p "$HOME/.codex/log"
+  nohup "$OLLAMA_BIN" serve >"$HOME/.codex/log/ollama-auto.log" 2>&1 &
+
+  for _ in $(seq 1 30); do
+    if "$OLLAMA_BIN" list >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "Failed to start Ollama automatically. Check: $HOME/.codex/log/ollama-auto.log" >&2
+  return 1
+}
+
+ensure_ollama
+
+if ! "$OLLAMA_BIN" show "$MODEL" >/dev/null 2>&1; then
+  echo "Ollama model not found: $MODEL" >&2
+  echo "Installed models:" >&2
+  "$OLLAMA_BIN" list >&2
+  echo "Try: ollama pull $DEFAULT_MODEL" >&2
+  exit 1
+fi
+
+export OLLAMA_API_BASE="${OLLAMA_API_BASE:-http://127.0.0.1:11434}"
+export AIDER_OPENAI_API_BASE="${AIDER_OPENAI_API_BASE:-$OLLAMA_API_BASE/v1}"
+
+if [[ "$HAS_MODEL_FLAG" == "1" ]]; then
+  exec "$AIDER_BIN" --no-show-model-warnings "$@"
+fi
+
+exec "$AIDER_BIN" --model "ollama/$MODEL" --no-show-model-warnings "$@"
