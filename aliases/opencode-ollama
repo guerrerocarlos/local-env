@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OPENCODE_BIN="${OPENCODE_BIN:-$(command -v opencode || true)}"
+if [[ -z "$OPENCODE_BIN" ]]; then
+  echo "opencode not found in PATH. Install with: npm i -g opencode-ai" >&2
+  exit 1
+fi
+
+OLLAMA_BIN="${OLLAMA_BIN:-$HOME/.local/bin/ollama}"
+if ! command -v "$OLLAMA_BIN" >/dev/null 2>&1; then
+  OLLAMA_BIN="ollama"
+fi
+
+MODEL="${OPENCODE_OLLAMA_MODEL:-ollama/qwen2.5-coder:14b}"
+
+if ! "$OLLAMA_BIN" list >/dev/null 2>&1; then
+  mkdir -p "$HOME/.codex/log"
+  nohup "$OLLAMA_BIN" serve >"$HOME/.codex/log/ollama-auto.log" 2>&1 &
+  for _ in $(seq 1 30); do
+    if "$OLLAMA_BIN" list >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+fi
+
+exec "$OPENCODE_BIN" -m "$MODEL" "$@"

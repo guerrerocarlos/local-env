@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AIDER_BIN="${AIDER_BIN:-$(command -v aider || true)}"
+if [[ -z "$AIDER_BIN" ]]; then
+  echo "aider not found in PATH. Install it first." >&2
+  exit 1
+fi
+
+LMS_BIN="${LMS_BIN:-$HOME/.lmstudio/bin/lms}"
+if ! command -v "$LMS_BIN" >/dev/null 2>&1; then
+  LMS_BIN="lms"
+fi
+
+LMS_HOST="${LMS_HOST:-127.0.0.1}"
+LMS_PORT="${LMS_PORT:-1234}"
+BASE_URL="http://${LMS_HOST}:${LMS_PORT}"
+
+HAS_MODEL_FLAG=0
+HAS_HELP_FLAG=0
+for ((i=1; i<=$#; i++)); do
+  arg="${!i}"
+  if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
+    HAS_HELP_FLAG=1
+  fi
+  if [[ "$arg" == "--model" || "$arg" == "-m" || "$arg" == --model=* ]]; then
+    HAS_MODEL_FLAG=1
+    break
+  fi
+done
+
+ensure_lmstudio_server() {
+  if "$LMS_BIN" server status 2>/dev/null | rg -q 'running'; then
+    return 0
+  fi
+
+  "$LMS_BIN" server start >/dev/null 2>&1 || true
+
+  for _ in $(seq 1 20); do
+    if "$LMS_BIN" server status 2>/dev/null | rg -q 'running'; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "LM Studio server is not running. Start it with: lms server start" >&2
+  return 1
+}
+
+pick_loaded_llm_model() {
+  "$LMS_BIN" ps --json 2>/dev/null | jq -r '
+    map(select((.type // "") == "llm" or (.type // "") == "chat"))
+    | .[0]
+    | (.identifier // .id // .modelKey // .path // empty)
+  '
+}
+
+ensure_lmstudio_server
+
+export AIDER_OPENAI_API_BASE="${AIDER_OPENAI_API_BASE:-${BASE_URL}/v1}"
+
+if [[ "$HAS_HELP_FLAG" == "1" ]]; then
+  exec "$AIDER_BIN" "$@"
+fi
+
+if [[ "$HAS_MODEL_FLAG" == "1" ]]; then
+  exec "$AIDER_BIN" --no-show-model-warnings "$@"
+fi
+
+MODEL="${AIDER_LMSTUDIO_MODEL:-}"
+if [[ -z "$MODEL" ]]; then
+  MODEL="$(pick_loaded_llm_model || true)"
+fi
+
+if [[ -z "$MODEL" ]]; then
+  cat >&2 <<MSG
+No LLM model is loaded in LM Studio.
+
+1) List downloaded models: lms ls
+2) Load one for chat/code:  lms load <model-path-or-key> --identifier qwen-coder --yes
+3) Then run: aider-lmstudio
+
+Or set a model explicitly:
+  AIDER_LMSTUDIO_MODEL=<identifier> aider-lmstudio
+MSG
+  exit 1
+fi
+
+exec "$AIDER_BIN" --model "openai/${MODEL}" --no-show-model-warnings "$@"

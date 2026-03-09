@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OPENCODE_BIN="${OPENCODE_BIN:-$(command -v opencode || true)}"
+if [[ -z "$OPENCODE_BIN" ]]; then
+  echo "opencode not found in PATH. Install with: npm i -g opencode-ai" >&2
+  exit 1
+fi
+
+LMS_BIN="${LMS_BIN:-$HOME/.lmstudio/bin/lms}"
+if ! command -v "$LMS_BIN" >/dev/null 2>&1; then
+  LMS_BIN="lms"
+fi
+
+if ! "$LMS_BIN" server status 2>/dev/null | rg -q 'running'; then
+  "$LMS_BIN" server start >/dev/null 2>&1 || true
+  for _ in $(seq 1 20); do
+    if "$LMS_BIN" server status 2>/dev/null | rg -q 'running'; then
+      break
+    fi
+    sleep 1
+  done
+fi
+
+MODEL="${OPENCODE_LMSTUDIO_MODEL:-lmstudio/deepseek-coder-v2-16b}"
+MODEL_ID="${MODEL#lmstudio/}"
+
+if ! "$LMS_BIN" ps --json 2>/dev/null | jq -e --arg id "$MODEL_ID" 'map(.identifier // .id // .modelKey // .path) | index($id) != null' >/dev/null; then
+  "$LMS_BIN" load deepseek-coder-v2-lite-instruct --identifier "$MODEL_ID" --gpu max -c 32768 -y >/dev/null 2>&1 || true
+fi
+
+exec "$OPENCODE_BIN" -m "$MODEL" "$@"

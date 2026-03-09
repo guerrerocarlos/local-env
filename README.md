@@ -7,6 +7,9 @@ Portable backup for local Codex + Ollama workflow aliases and baseline config.
 - `aliases/codex-local`: run Codex against local Ollama model (`qwen2.5-coder:14b`) without changing default `codex`.
 - `aliases/codex-yolo-qwen25`: same local model, but bypass approvals/sandbox for fast local runs.
 - `aliases/codex-upstream`: explicit helper to run upstream Codex.
+- `aliases/codex-lmstudio`: run Codex against a model loaded in LM Studio.
+- `aliases/opencode-ollama`: run OpenCode CLI against Ollama.
+- `aliases/opencode-lmstudio`: run OpenCode CLI against LM Studio.
 - `scripts/install.sh`: installs aliases into `~/.local/bin`.
 - `codex/config.toml.example`: minimal Codex config baseline.
 - `ollama/models.txt`: model names to pull.
@@ -43,6 +46,9 @@ codex                 # upstream/default behavior
 codex-local           # local Ollama model
 codex-yolo-qwen25     # local Ollama + yolo flags
 codex-upstream         # explicit upstream
+codex-lmstudio         # local LM Studio model
+opencode-ollama        # OpenCode via Ollama
+opencode-lmstudio      # OpenCode via LM Studio
 ```
 
 ## Optional overrides
@@ -75,6 +81,48 @@ Optional overrides:
 - `AIDER_OLLAMA_MODEL`: default model for aider-local
 - `OLLAMA_BIN`: explicit ollama binary path
 - `AIDER_BIN`: explicit aider binary path
+
+## LM Studio helpers
+
+- `aliases/aider-lmstudio`: run aider against LM Studio OpenAI-compatible API (`http://127.0.0.1:1234/v1`).
+- `aliases/codex-lmstudio`: run Codex against LM Studio using `--local-provider lmstudio`.
+
+Behavior:
+- Auto-starts LM Studio server if not running.
+- Uses first loaded LLM model from `lms ps` unless overridden.
+- Prints clear instructions if no LLM model is loaded.
+
+Usage:
+
+```bash
+aider-lmstudio
+codex-lmstudio
+```
+
+Overrides:
+- `AIDER_LMSTUDIO_MODEL`: explicit model identifier for `aider-lmstudio`
+- `CODEX_LMSTUDIO_MODEL`: explicit model identifier for `codex-lmstudio`
+- `LMS_BIN`: explicit `lms` binary path
+
+## OpenCode helpers
+
+- `aliases/opencode-ollama`: starts/uses Ollama and runs OpenCode with `ollama/qwen2.5-coder:14b` by default.
+- `aliases/opencode-lmstudio`: starts/uses LM Studio server and runs OpenCode with `lmstudio/deepseek-coder-v2-16b` by default.
+
+Usage:
+
+```bash
+opencode-ollama
+opencode-lmstudio
+```
+
+Overrides:
+- `OPENCODE_OLLAMA_MODEL`: default model for `opencode-ollama`
+- `OPENCODE_LMSTUDIO_MODEL`: default model for `opencode-lmstudio`
+- `OPENCODE_BIN`: explicit `opencode` binary path
+
+Config example:
+- `opencode/opencode.json.example`
 
 ## New terminal troubleshooting
 

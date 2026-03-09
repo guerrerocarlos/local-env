@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REAL_CODEX_BIN="${REAL_CODEX_BIN:-$(command -v codex || true)}"
+if [[ -z "$REAL_CODEX_BIN" ]]; then
+  echo "codex binary not found in PATH. Install Codex CLI first." >&2
+  exit 1
+fi
+
+LMS_BIN="${LMS_BIN:-$HOME/.lmstudio/bin/lms}"
+if ! command -v "$LMS_BIN" >/dev/null 2>&1; then
+  LMS_BIN="lms"
+fi
+
+ensure_lmstudio_server() {
+  if "$LMS_BIN" server status 2>/dev/null | rg -q 'running'; then
+    return 0
+  fi
+
+  "$LMS_BIN" server start >/dev/null 2>&1 || true
+
+  for _ in $(seq 1 20); do
+    if "$LMS_BIN" server status 2>/dev/null | rg -q 'running'; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "LM Studio server is not running. Start it with: lms server start" >&2
+  return 1
+}
+
+pick_loaded_llm_model() {
+  "$LMS_BIN" ps --json 2>/dev/null | jq -r '
+    map(select((.type // "") == "llm" or (.type // "") == "chat"))
+    | .[0]
+    | (.identifier // .id // .modelKey // .path // empty)
+  '
+}
+
+run_codex_lmstudio() {
+  local model="$1"
+  shift
+
+  if [[ $# -gt 0 && ( "$1" == "exec" || "$1" == "review" ) ]]; then
+    local cmd="$1"
+    shift
+    exec "$REAL_CODEX_BIN" "$cmd" --oss --local-provider lmstudio -m "$model" "$@"
+  fi
+
+  exec "$REAL_CODEX_BIN" --oss --local-provider lmstudio -m "$model" "$@"
+}
+
+ensure_lmstudio_server
+
+MODEL="${CODEX_LMSTUDIO_MODEL:-}"
+if [[ -z "$MODEL" ]]; then
+  MODEL="$(pick_loaded_llm_model || true)"
+fi
+
+if [[ -z "$MODEL" ]]; then
+  cat >&2 <<MSG
+No LLM model is loaded in LM Studio.
+
+1) List downloaded models: lms ls
+2) Load one for chat/code:  lms load <model-path-or-key> --identifier qwen-coder --yes
+3) Then run: codex-lmstudio
+
+Or set a model explicitly:
+  CODEX_LMSTUDIO_MODEL=<identifier> codex-lmstudio
+MSG
+  exit 1
+fi
+
+run_codex_lmstudio "$MODEL" "$@"
