@@ -75,3 +75,22 @@ Optional overrides:
 - `AIDER_OLLAMA_MODEL`: default model for aider-local
 - `OLLAMA_BIN`: explicit ollama binary path
 - `AIDER_BIN`: explicit aider binary path
+
+## New terminal troubleshooting
+
+If a wrapper command is not found in a fresh terminal:
+
+1. Verify install location:
+```bash
+ls -l ~/.local/bin/aider-local ~/.local/bin/codex-local
+```
+2. Ensure your shell includes `~/.local/bin` (and optionally `~/bin`) in `PATH`.
+3. For `bash`, add to `~/.bashrc`:
+```bash
+export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+```
+4. For `fish`, add to `~/.config/fish/config.fish`:
+```fish
+fish_add_path -m $HOME/.local/bin $HOME/bin
+```
+5. Open a new terminal (or source your shell config).
