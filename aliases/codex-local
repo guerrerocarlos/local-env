@@ -33,33 +33,41 @@ ensure_ollama() {
   return 1
 }
 
-# Codex may emit a harmless warning for local Ollama models with no built-in metadata.
-# Hide only this known warning by default; set CODEX_LOCAL_SHOW_METADATA_WARNING=1 to show it.
+# Hide only the known non-fatal model metadata warning (single-line and wrapped variants).
 filter_known_metadata_warning() {
   awk -v model="$MODEL" '
     BEGIN {
       first = "Model metadata for `" model "` not found"
       second = "can degrade performance and cause issues."
+      skip = 0
     }
-    index($0, first) > 0 { skip=1; next }
-    skip && index($0, second) > 0 { skip=0; next }
+    index($0, first) > 0 {
+      if (index($0, second) > 0) {
+        next
+      }
+      skip = 1
+      next
+    }
+    skip && index($0, second) > 0 { skip = 0; next }
     { print > "/dev/stderr" }
   '
+}
+
+run_codex_local() {
+  # For subcommands, these flags must be passed on the subcommand itself.
+  if [[ $# -gt 0 && ( "$1" == "exec" || "$1" == "review" ) ]]; then
+    local cmd="$1"
+    shift
+    exec "$REAL_CODEX_BIN" "$cmd" --oss --local-provider ollama -m "$MODEL" "$@"
+  fi
+
+  exec "$REAL_CODEX_BIN" --oss --local-provider ollama -m "$MODEL" "$@"
 }
 
 ensure_ollama
 
 if [[ "${CODEX_LOCAL_SHOW_METADATA_WARNING:-0}" == "1" ]]; then
-  exec "$REAL_CODEX_BIN" \
-    --oss \
-    --local-provider ollama \
-    -m "$MODEL" \
-    "$@"
+  run_codex_local "$@"
 fi
 
-exec "$REAL_CODEX_BIN" \
-  --oss \
-  --local-provider ollama \
-  -m "$MODEL" \
-  "$@" \
-  2> >(filter_known_metadata_warning)
+run_codex_local "$@" 2> >(filter_known_metadata_warning)

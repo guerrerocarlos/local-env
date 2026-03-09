@@ -38,28 +38,34 @@ filter_known_metadata_warning() {
     BEGIN {
       first = "Model metadata for `" model "` not found"
       second = "can degrade performance and cause issues."
+      skip = 0
     }
-    index($0, first) > 0 { skip=1; next }
-    skip && index($0, second) > 0 { skip=0; next }
+    index($0, first) > 0 {
+      if (index($0, second) > 0) {
+        next
+      }
+      skip = 1
+      next
+    }
+    skip && index($0, second) > 0 { skip = 0; next }
     { print > "/dev/stderr" }
   '
+}
+
+run_codex_local_yolo() {
+  if [[ $# -gt 0 && ( "$1" == "exec" || "$1" == "review" ) ]]; then
+    local cmd="$1"
+    shift
+    exec "$REAL_CODEX_BIN" "$cmd" --oss --local-provider ollama -m "$MODEL" --dangerously-bypass-approvals-and-sandbox "$@"
+  fi
+
+  exec "$REAL_CODEX_BIN" --oss --local-provider ollama -m "$MODEL" --dangerously-bypass-approvals-and-sandbox "$@"
 }
 
 ensure_ollama
 
 if [[ "${CODEX_LOCAL_SHOW_METADATA_WARNING:-0}" == "1" ]]; then
-  exec "$REAL_CODEX_BIN" \
-    --oss \
-    --local-provider ollama \
-    -m "$MODEL" \
-    --dangerously-bypass-approvals-and-sandbox \
-    "$@"
+  run_codex_local_yolo "$@"
 fi
 
-exec "$REAL_CODEX_BIN" \
-  --oss \
-  --local-provider ollama \
-  -m "$MODEL" \
-  --dangerously-bypass-approvals-and-sandbox \
-  "$@" \
-  2> >(filter_known_metadata_warning)
+run_codex_local_yolo "$@" 2> >(filter_known_metadata_warning)
