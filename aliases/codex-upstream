@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REAL_CODEX_BIN="${REAL_CODEX_BIN:-$(command -v codex || true)}"
+
+if [[ -z "$REAL_CODEX_BIN" ]]; then
+  echo "codex binary not found in PATH. Install Codex CLI first." >&2
+  exit 1
+fi
+
+exec "$REAL_CODEX_BIN" "$@"

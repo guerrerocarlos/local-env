@@ -1,0 +1,8 @@
+# Copy selected settings into ~/.codex/config.toml
+model = "gpt-5.3-codex"
+model_reasoning_effort = "medium"
+personality = "pragmatic"
+
+# Optional: trust local workspaces
+[projects."/home/gnu"]
+trust_level = "trusted"

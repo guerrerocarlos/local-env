@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MODEL="${CODEX_LOCAL_MODEL:-qwen2.5-coder:14b}"
+OLLAMA_BIN="${OLLAMA_BIN:-$HOME/.local/bin/ollama}"
+REAL_CODEX_BIN="${REAL_CODEX_BIN:-$(command -v codex || true)}"
+
+if [[ -z "$REAL_CODEX_BIN" ]]; then
+  echo "codex binary not found in PATH. Install Codex CLI first." >&2
+  exit 1
+fi
+
+if ! command -v "$OLLAMA_BIN" >/dev/null 2>&1; then
+  OLLAMA_BIN="ollama"
+fi
+
+ensure_ollama() {
+  if "$OLLAMA_BIN" list >/dev/null 2>&1; then
+    return 0
+  fi
+
+  mkdir -p "$HOME/.codex/log"
+  nohup "$OLLAMA_BIN" serve >"$HOME/.codex/log/ollama-auto.log" 2>&1 &
+
+  for _ in $(seq 1 30); do
+    if "$OLLAMA_BIN" list >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "Failed to start Ollama automatically. Check: $HOME/.codex/log/ollama-auto.log" >&2
+  return 1
+}
+
+# Codex may emit a harmless warning for local Ollama models with no built-in metadata.
+# Hide only this known warning by default; set CODEX_LOCAL_SHOW_METADATA_WARNING=1 to show it.
+filter_known_metadata_warning() {
+  awk -v model="$MODEL" '
+    BEGIN {
+      first = "Model metadata for `" model "` not found"
+      second = "can degrade performance and cause issues."
+    }
+    index($0, first) > 0 { skip=1; next }
+    skip && index($0, second) > 0 { skip=0; next }
+    { print > "/dev/stderr" }
+  '
+}
+
+ensure_ollama
+
+if [[ "${CODEX_LOCAL_SHOW_METADATA_WARNING:-0}" == "1" ]]; then
+  exec "$REAL_CODEX_BIN" \
+    --oss \
+    --local-provider ollama \
+    -m "$MODEL" \
+    "$@"
+fi
+
+exec "$REAL_CODEX_BIN" \
+  --oss \
+  --local-provider ollama \
+  -m "$MODEL" \
+  "$@" \
+  2> >(filter_known_metadata_warning)
